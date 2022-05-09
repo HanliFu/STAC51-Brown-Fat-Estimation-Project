@@ -1,0 +1,113 @@
+---
+title: "c51"
+author: "hlf"
+date: "2022/3/30"
+output: pdf_document
+---
+
+```{r}
+
+library(readxl)
+dat <-read_excel("BrownFat.xls")
+head(dat)
+colnames(dat)[9]<-'ThreeD_temp'
+colnames(dat)[8]<-'TwoD_temp'
+colnames(dat)[10]<-'SevenD_temp'
+colnames(dat)[11]<-'oneM_temp'
+```
+
+
+
+```{r}
+#Start:  AIC=2161.95
+model_test = glm(data= dat,BrownFat~as.factor(Sex)+as.factor(Diabetes)+Age+Day+Month+
+                     Ext_Temp+TwoD_temp+ThreeD_temp+SevenD_temp+oneM_temp+as.factor(Season)+
+                     Duration_Sunshine+Weigth+Size+BMI+Glycemy+LBW+as.factor(Cancer_Status)+as.factor(Cancer_Type)
+                 , family =binomial(link = 'logit'))
+summary(model_test)
+
+
+
+#try step()
+step(model_test, direction = 'backward', test = 'Chisq')
+#with AIC 2123.89
+
+#                       Df Deviance    AIC    LRT  Pr(>Chi)    
+# <none>                     2095.9 2123.9                     
+# - as.factor(Season)    3   2102.1 2124.1  6.219  0.101418    
+# - oneM_temp            1   2099.1 2125.1  3.237  0.072009 .  
+# - Duration_Sunshine    1   2099.7 2125.7  3.781  0.051825 .  
+# - LBW                  1   2101.6 2127.6  5.664  0.017320 *  
+# - ThreeD_temp          1   2105.1 2131.1  9.179  0.002448 ** 
+# - TwoD_temp            1   2106.6 2132.6 10.659  0.001096 ** 
+# - Ext_Temp             1   2111.2 2137.2 15.340 8.980e-05 ***
+# - as.factor(Diabetes)  1   2115.2 2141.2 19.289 1.124e-05 ***
+# - Weigth               1   2120.9 2146.9 25.006 5.715e-07 ***
+# - as.factor(Sex)       1   2134.4 2160.4 38.496 5.486e-10 ***
+# - Age                  1   2178.4 2204.4 82.469 < 2.2e-16 ***
+# ---
+after_step = glm(formula = BrownFat ~ as.factor(Sex) + as.factor(Diabetes) + 
+    Age + Ext_Temp + TwoD_temp + ThreeD_temp + oneM_temp + as.factor(Season) + 
+    Duration_Sunshine + Weigth + LBW, family = binomial(link = "logit"), 
+    data = dat)
+summary(after_step)
+```
+
+
+after_step :AIC=2123.89
+try to improve the model
+
+
+```{r}
+
+#try to find significant interaction term through 5 most significant variable
+model_test_interaction = glm(formula = BrownFat ~Ext_Temp* as.factor(Diabetes) 
+                             *Weigth*as.factor(Sex) * Age, family = binomial(link = "logit"), data = dat)
+
+step(model_test_interaction)
+#with AIC=2126
+# glm(formula = BrownFat ~ Ext_Temp + as.factor(Diabetes) + Weigth + as.factor(Sex)+ Age + as.factor(Diabetes):as.factor(Sex) + Weigth:as.factor(Sex) + as.factor(Diabetes):Age + Weigth:Age + as.factor(Sex):Age + as.factor(Diabetes):as.factor(Sex):Age + Weigth:as.factor(Sex):Age, family = binomial(link = "logit"), data = dat)
+
+```
+
+Then we get some interaction terms
+
+```{r}
+#add interaction terms to the original model
+
+model_test_interaction = glm(data= dat,BrownFat~as.factor(Sex)+as.factor(Diabetes)+Age+Day+Month+Ext_Temp+TwoD_temp+ThreeD_temp+SevenD_temp+oneM_temp+as.factor(Season)+Duration_Sunshine+Weigth+Size+BMI+Glycemy+LBW+as.factor(Cancer_Status)+as.factor(Cancer_Type)+ as.factor(Diabetes):as.factor(Sex) + Weigth:as.factor(Sex) + as.factor(Diabetes):Age + Weigth:Age + as.factor(Sex):Age + as.factor(Diabetes):as.factor(Sex):Age + Weigth:as.factor(Sex):Age, family =binomial(link = 'logit'))
+
+
+step(model_test_interaction)
+
+# Step:  AIC=2115.1
+# BrownFat ~ as.factor(Sex) + as.factor(Diabetes) + Age + Ext_Temp +
+#     TwoD_temp + ThreeD_temp + oneM_temp + as.factor(Season) +
+#     Duration_Sunshine + Weigth + LBW + as.factor(Sex):as.factor(Diabetes) +
+#     as.factor(Sex):Weigth + as.factor(Diabetes):Age + Age:Weigth +
+#     as.factor(Sex):Age + as.factor(Sex):as.factor(Diabetes):Age +
+#     as.factor(Sex):Age:Weigth
+
+updated_model = glm(data=dat, BrownFat ~ as.factor(Sex) + as.factor(Diabetes) + Age + Ext_Temp +
+    TwoD_temp + ThreeD_temp + oneM_temp + as.factor(Season) +
+    Duration_Sunshine + Weigth + LBW + as.factor(Sex):as.factor(Diabetes) +
+    as.factor(Sex):Weigth + as.factor(Diabetes):Age + Age:Weigth +
+    as.factor(Sex):Age + as.factor(Sex):as.factor(Diabetes):Age +
+    as.factor(Sex):Age:Weigth, family =binomial(link = 'logit'))
+summary(updated_model)
+```
+
+We get updated_model's AIC = 2115.1 which is smaller then the after_step's AIC = 2123.89.
+
+
+
+
+```{r warning=FALSE}
+Sys.setenv(LANGUAGE = 'en')
+library(pROC)
+roc1<-roc(dat$BrownFat~fitted(updated_model),smooth = TRUE)
+plot(roc1,print.auc=TRUE,plot=TRUE)
+```
+
+AUC tells how much the model is capable of distinguishing between classes.
+
